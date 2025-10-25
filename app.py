@@ -3,13 +3,16 @@ from pydantic import BaseModel
 from transformers import pipeline
 import torch
 import os
-# get path from env
-SAVING_PATH = os.getenv("SAVING_PATH", "./finetuned_bertweet_model")
+
+
+HF_TOKEN = os.getenv("HF_TOKEN")
+
+MODEL = "IoanRoume/twitter-misinformation-bertweet"
 
 device = 0 if torch.cuda.is_available() else -1
 
 print("Loading classification pipeline...")
-classifier = pipeline("text-classification", model=SAVING_PATH, device=device)
+classifier = pipeline("text-classification", model=MODEL, device=device)
 print("Pipeline loaded.")
 
 
@@ -22,7 +25,8 @@ class TweetRequest(BaseModel):
 class PredictionResponse(BaseModel):
     prediction: str
     confidence: float
-#WITH BASIC AUTHENTICATION
+
+
 @app.post("/predict", response_model=PredictionResponse, summary="Predict Misinformation in Tweet", description="Classify a tweet as misinformation or not.")
 async def predict_misinformation(request: TweetRequest):
     result = classifier(request.text, truncation=True, padding=True)[0]
