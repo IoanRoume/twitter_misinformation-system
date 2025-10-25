@@ -9,10 +9,17 @@ def tokenize_function(example):
     return tokenizer(example['text'], truncation=True, padding= 'max_length', max_length = 128)
 
 ds = load_dataset("roupenminassian/twitter-misinformation")
+
+id2label = {0: "Legitimate", 1: "Misinformation"}
+label2id = {"Legitimate": 0, "Misinformation": 1}
+
 model_name = "vinai/bertweet-base"
 
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=2).to(torch.device("cuda" if torch.cuda.is_available() else "cpu"))
+
+model.config.id2label = id2label
+model.config.label2id = label2id
 
 
 tokenized_train = ds['train'].map(tokenize_function, batched=True)
@@ -60,5 +67,6 @@ print("Training completed.")
 
 saving_path = "./finetuned_bertweet_model"
 trainer.save_model(saving_path)
+tokenizer.save_pretrained(saving_path)
 print(f"Model saved to {saving_path}")
 
