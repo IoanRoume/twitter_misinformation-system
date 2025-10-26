@@ -2,9 +2,9 @@ name: Continuous Training
 
 on:
   workflow_dispatch: 
-  schedule:
-    # Runs every Sunday at 00:00 UTC
-    - cron: '0 0 * * 0'
+#   schedule:
+#     # Runs every Sunday at 00:00 UTC
+#     - cron: '0 0 * * 0'
 
 jobs:
   train_evaluate_promote:
