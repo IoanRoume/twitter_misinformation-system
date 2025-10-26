@@ -74,10 +74,8 @@ jobs:
         run: |
           echo "Pushing the new best model to the Hugging Face Hub..."
           huggingface-cli login --token ${{ secrets.HF_HUB_TOKEN_WRITE }}
-          python -m huggingface_hub.upload_folder \
-            --folder ./finetuned_bertweet_model \
-            --repo_id IoanRoume/twitter-misinformation-bertweet \
-            --commit_message "Promote new model with F1=${{ steps.train_eval.outputs.new_f1 }}"
+          hf upload IoanRoume/twitter-misinformation-bertweet ./finetuned_bertweet_model \
+            --commit-message "Promote new model with F1=${{ steps.train_eval.outputs.new_f1 }}"
 
       - name: Commit and Push Updated F1 Score
         if: steps.promote.outputs.promote_needed == 'true'
