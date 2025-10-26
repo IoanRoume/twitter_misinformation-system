@@ -19,7 +19,6 @@ def compute_metrics(eval_pred):
 
 MODEL_NAME = "vinai/bertweet-base"
 DATASET_NAME = "roupenminassian/twitter-misinformation"
-HUB_MODEL_ID = "IoanRoume/twitter-misinformation-bertweet" 
 LOCAL_SAVING_PATH = "./finetuned_bertweet_model"
 
 ds = load_dataset("roupenminassian/twitter-misinformation")
@@ -34,7 +33,10 @@ model = AutoModelForSequenceClassification.from_pretrained(MODEL_NAME, num_label
 model.config.id2label = id2label
 model.config.label2id = label2id
 
-
+# Use only 10% of data for quick test
+ds['train'] = ds['train'].select(range(len(ds['train']) // 10))
+ds['test'] = ds['test'].select(range(len(ds['test']) // 10))
+print("Tokenizing dataset...")
 tokenized_train = ds['train'].map(tokenize_function, batched=True)
 tokenized_test = ds['test'].map(tokenize_function, batched=True)
 
@@ -45,7 +47,7 @@ training_args = TrainingArguments(
     learning_rate=2e-05,              
     per_device_train_batch_size=16,
     per_device_eval_batch_size=16,
-    num_train_epochs=2,              
+    num_train_epochs=1,              
     weight_decay=0.01,               
     save_total_limit=1,              
     load_best_model_at_end=True,     
