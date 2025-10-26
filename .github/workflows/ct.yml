@@ -1,0 +1,94 @@
+name: Continuous Training
+
+on:
+  workflow_dispatch: 
+  schedule:
+    # Runs every Sunday at 00:00 UTC
+    - cron: '0 0 * * 0'
+
+jobs:
+  train_evaluate_promote:
+    name: Train, Evaluate, and Promote Model
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install huggingface_hub jq
+
+      - name: Login to Hugging Face Hub (Write Access)
+        run: huggingface-cli login --token ${{ secrets.HF_HUB_TOKEN_WRITE }}
+
+      - name: Run Training and Evaluation Script
+        id: train_eval
+        run: |
+          echo "Starting training on CPU runner..."
+          python finetune_model.py
+          if [ ! -f ./results/eval_results.json ]; then
+              echo "Evaluation results file not found!"
+              exit 1
+          fi
+          new_f1=$(jq '.eval_f1' ./results/eval_results.json)
+          echo "Extracted new F1 score: $new_f1"
+          echo "new_f1=$new_f1" >> $GITHUB_OUTPUT
+
+      - name: Get Current Best F1 Score
+        id: get_current_f1
+        run: |
+          if [ ! -f current_f1.txt ]; then
+              echo "0.0" > current_f1.txt
+              echo "Created current_f1.txt with initial value 0.0"
+          fi
+          current_f1=$(cat current_f1.txt | grep -oE '[0-9]+\.?[0-9]*' || echo "0.0")
+          echo "current_f1=$current_f1" >> $GITHUB_OUTPUT
+          echo "Current best F1: $current_f1"
+          echo "New model F1: ${{ steps.train_eval.outputs.new_f1 }}"
+
+      - name: Compare F1 Scores
+        id: promote
+        run: |
+          if awk -v new_f1="${{ steps.train_eval.outputs.new_f1 }}" -v current_f1="${{ steps.get_current_f1.outputs.current_f1 }}" 'BEGIN { exit !(new_f1 > current_f1) }'; then
+              echo "New model is better! Promoting."
+              echo "promote_needed=true" >> $GITHUB_OUTPUT
+              echo "${{ steps.train_eval.outputs.new_f1 }}" > current_f1.txt
+          else
+              echo "Current model is better or equal. No promotion needed."
+              echo "promote_needed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Push Better Model to Hub
+        if: steps.promote.outputs.promote_needed == 'true'
+        run: |
+          echo "Pushing the new best model to the Hugging Face Hub..."
+          huggingface-cli login --token ${{ secrets.HF_HUB_TOKEN_WRITE }}
+          python -m huggingface_hub.upload_folder \
+            --folder ./finetuned_bertweet_model \
+            --repo_id IoanRoume/twitter-misinformation-bertweet \
+            --commit_message "Promote new model with F1=${{ steps.train_eval.outputs.new_f1 }}"
+
+      - name: Commit and Push Updated F1 Score
+        if: steps.promote.outputs.promote_needed == 'true'
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git add current_f1.txt
+          if git diff --staged --quiet; then
+              echo "No changes to commit in current_f1.txt."
+          else
+              git commit -m "Update best F1 score to ${{ steps.train_eval.outputs.new_f1 }}"
+              echo "Pushing updated F1 score..."
+              git push
+          fi

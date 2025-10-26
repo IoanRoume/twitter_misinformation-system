@@ -27,15 +27,17 @@ class PredictionResponse(BaseModel):
     confidence: float
 
 
-@app.post("/predict", response_model=PredictionResponse, summary="Predict Misinformation in Tweet", description="Classify a tweet as misinformation or not.")
+@app.post("/predict", response_model=PredictionResponse)
 async def predict_misinformation(request: TweetRequest):
-    result = classifier(request.text, truncation=True, padding=True)[0]
-    prediction = "Misinformation" if result['label'] == 'LABEL_1' else "Legitimate"
-
-    return PredictionResponse(
-        prediction=prediction,
-        confidence=result['score']
-    )
+    try:
+        result = classifier(request.text, truncation=True, max_length=128)[0]
+        
+        return PredictionResponse(
+            prediction=result['label'],
+            confidence=result['score']
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
 
 
 if __name__ == "__main__":
