@@ -1,8 +1,9 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from transformers import pipeline
 import torch
 import os
+from typing import List
 
 
 HF_TOKEN = os.getenv("HF_TOKEN")
@@ -16,26 +17,35 @@ classifier = pipeline("text-classification", model=MODEL, device=device)
 print("Pipeline loaded.")
 
 
-app = FastAPI(title="Misinformation Detection API", description="API for detecting misinformation in tweets using a fine-tuned BERTweet model.", version="1.0.0")
+app = FastAPI(title="Misinformation Detection API", description="API for detecting misinformation in tweets using a fine-tuned BERTweet model.", version="1.0.1")
 
 class TweetRequest(BaseModel):
+    text: List[str]
+
+
+class PredictionItem(BaseModel):
     text: str
-
-
-class PredictionResponse(BaseModel):
     prediction: str
     confidence: float
+
+class PredictionResponse(BaseModel):
+    predictions: List[PredictionItem]
 
 
 @app.post("/predict", response_model=PredictionResponse)
 async def predict_misinformation(request: TweetRequest):
     try:
-        result = classifier(request.text, truncation=True, max_length=128)[0]
+        results = classifier(request.text, truncation=True, max_length=128)
+
+        predictions = [
+            PredictionItem(
+                text=text,
+                prediction=result['label'],
+                confidence=result['score']
+            ) for text, result in zip(request.text, results)
+        ]
         
-        return PredictionResponse(
-            prediction=result['label'],
-            confidence=result['score']
-        )
+        return PredictionResponse(predictions=predictions)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
 
