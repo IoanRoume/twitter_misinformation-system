@@ -1,11 +1,19 @@
+<<<<<<< HEAD
 from fastapi import FastAPI, HTTPException, File, UploadFile
+=======
+from fastapi import FastAPI, HTTPException
+>>>>>>> main
 from pydantic import BaseModel
 from transformers import pipeline
 import torch
 import os
 from typing import List
+<<<<<<< HEAD
 from PIL import Image
 import io
+=======
+
+>>>>>>> main
 
 HF_TOKEN = os.getenv("HF_TOKEN")
 
@@ -18,10 +26,13 @@ classifier = pipeline("text-classification", model=MODEL_TEXT, device=device)
 print("Pipeline loaded.")
 
 
+<<<<<<< HEAD
 print("Loading image classification pipeline...")
 image_classifier = pipeline("image-classification", model=MODEL_IMAGE, device=device)
 print("Image pipeline loaded.")
 
+=======
+>>>>>>> main
 app = FastAPI(title="Misinformation Detection API", description="API for detecting misinformation in tweets using a fine-tuned BERTweet model.", version="1.0.1")
 
 class TweetRequest(BaseModel):
@@ -30,6 +41,7 @@ class TweetRequest(BaseModel):
 
 class PredictionItem(BaseModel):
     text: str
+<<<<<<< HEAD
     prediction: str
     confidence: float
 
@@ -57,12 +69,36 @@ async def predict_misinformation(request: TweetRequest):
 
 class ImagePredictionItem(BaseModel):
     filename: str
+=======
+>>>>>>> main
     prediction: str
     confidence: float
 
+class PredictionResponse(BaseModel):
+    predictions: List[PredictionItem]
 
+
+<<<<<<< HEAD
 class ImagePredictionResponse(BaseModel):
     predictions: List[ImagePredictionItem]
+=======
+@app.post("/predict", response_model=PredictionResponse)
+async def predict_misinformation(request: TweetRequest):
+    try:
+        results = classifier(request.text, truncation=True, max_length=128)
+
+        predictions = [
+            PredictionItem(
+                text=text,
+                prediction=result['label'],
+                confidence=result['score']
+            ) for text, result in zip(request.text, results)
+        ]
+        
+        return PredictionResponse(predictions=predictions)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
+>>>>>>> main
 
 @app.post("/predict/image")
 async def predict_image(files: List[UploadFile] = File(...)):
