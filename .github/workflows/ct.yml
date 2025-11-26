@@ -1,15 +1,26 @@
 name: Continuous Training
 
 on:
-  workflow_dispatch: 
+  workflow_dispatch:
+    inputs:
+      model_type:
+        description: 'Model type to train'
+        required: true
+        default: 'text'
+        type: choice
+        options:
+          - text
+          - image
+          - both
 #   schedule:
 #     # Runs every Sunday at 00:00 UTC
-#     - cron: '0 0 * * 0'
+#     - cron: '0 0 * * 0
 
 jobs:
-  train_evaluate_promote:
-    name: Train, Evaluate, and Promote Model
+  train_text_model:
+    name: Train and Evaluate Text Model
     runs-on: ubuntu-latest
+    if: github.event.inputs.model_type == 'text' || github.event.inputs.model_type == 'both' || github.event_name == 'schedule'
 
     steps:
       - name: Check out code
@@ -32,61 +43,146 @@ jobs:
       - name: Login to Hugging Face Hub (Write Access)
         run: huggingface-cli login --token ${{ secrets.HF_HUB_TOKEN_WRITE }}
 
-      - name: Run Training and Evaluation Script
-        id: train_eval
+      - name: Run Text Model Training and Evaluation
+        id: train_eval_text
         run: |
-          echo "Starting training on CPU runner..."
-          python finetune_model.py
-          if [ ! -f ./results/eval_results.json ]; then
-              echo "Evaluation results file not found!"
+          echo "Starting text model training on CPU runner..."
+          python finetune_textClassifier_model.py
+          if [ ! -f ./results/eval_results_text.json ]; then
+              echo "Text evaluation results file not found!"
               exit 1
           fi
-          new_f1=$(jq '.eval_f1' ./results/eval_results.json)
-          echo "Extracted new F1 score: $new_f1"
+          new_f1=$(jq '.eval_f1' ./results/eval_results_text.json)
+          echo "Extracted new text F1 score: $new_f1"
           echo "new_f1=$new_f1" >> $GITHUB_OUTPUT
 
-      - name: Get Current Best F1 Score
-        id: get_current_f1
+      - name: Get Current Best Text F1 Score
+        id: get_current_text_f1
         run: |
-          if [ ! -f current_f1.txt ]; then
-              echo "0.0" > current_f1.txt
-              echo "Created current_f1.txt with initial value 0.0"
+          if [ ! -f current_f1_text.txt ]; then
+              echo "0.0" > current_f1_text.txt
+              echo "Created current_f1_text.txt with initial value 0.0"
           fi
-          current_f1=$(cat current_f1.txt | grep -oE '[0-9]+\.?[0-9]*' || echo "0.0")
+          current_f1=$(cat current_f1_text.txt | grep -oE '[0-9]+\.?[0-9]*' || echo "0.0")
           echo "current_f1=$current_f1" >> $GITHUB_OUTPUT
-          echo "Current best F1: $current_f1"
-          echo "New model F1: ${{ steps.train_eval.outputs.new_f1 }}"
+          echo "Current best text F1: $current_f1"
+          echo "New text model F1: ${{ steps.train_eval_text.outputs.new_f1 }}"
 
-      - name: Compare F1 Scores
-        id: promote
+      - name: Compare Text F1 Scores
+        id: promote_text
         run: |
-          if awk -v new_f1="${{ steps.train_eval.outputs.new_f1 }}" -v current_f1="${{ steps.get_current_f1.outputs.current_f1 }}" 'BEGIN { exit !(new_f1 > current_f1) }'; then
-              echo "New model is better! Promoting."
+          if awk -v new_f1="${{ steps.train_eval_text.outputs.new_f1 }}" -v current_f1="${{ steps.get_current_text_f1.outputs.current_f1 }}" 'BEGIN { exit !(new_f1 > current_f1) }'; then
+              echo "New text model is better! Promoting."
               echo "promote_needed=true" >> $GITHUB_OUTPUT
-              echo "${{ steps.train_eval.outputs.new_f1 }}" > current_f1.txt
+              echo "${{ steps.train_eval_text.outputs.new_f1 }}" > current_f1_text.txt
           else
-              echo "Current model is better or equal. No promotion needed."
+              echo "Current text model is better or equal. No promotion needed."
               echo "promote_needed=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Push Better Model to Hub
-        if: steps.promote.outputs.promote_needed == 'true'
+      - name: Push Better Text Model to Hub
+        if: steps.promote_text.outputs.promote_needed == 'true'
         run: |
-          echo "Pushing the new best model to the Hugging Face Hub..."
+          echo "Pushing the new best text model to the Hugging Face Hub..."
           huggingface-cli login --token ${{ secrets.HF_HUB_TOKEN_WRITE }}
-          hf upload IoanRoume/twitter-misinformation-bertweet ./finetuned_bertweet_model \
-            --commit-message "Promote new model with F1=${{ steps.train_eval.outputs.new_f1 }}"
+          huggingface-cli upload IoanRoume/twitter-misinformation-bertweet ./finetuned_bertweet_model \
+            --commit-message "Promote new text model with F1=${{ steps.train_eval_text.outputs.new_f1 }}"
 
-      - name: Commit and Push Updated F1 Score
-        if: steps.promote.outputs.promote_needed == 'true'
+      - name: Commit and Push Updated Text F1 Score
+        if: steps.promote_text.outputs.promote_needed == 'true'
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-          git add current_f1.txt
+          git add current_f1_text.txt
           if git diff --staged --quiet; then
-              echo "No changes to commit in current_f1.txt."
+              echo "No changes to commit in current_f1_text.txt."
           else
-              git commit -m "Update best F1 score to ${{ steps.train_eval.outputs.new_f1 }}"
-              echo "Pushing updated F1 score..."
+              git commit -m "Update best text F1 score to ${{ steps.train_eval_text.outputs.new_f1 }}"
+              echo "Pushing updated text F1 score..."
+              git push
+          fi
+
+  train_image_model:
+    name: Train and Evaluate Image Model
+    runs-on: ubuntu-latest
+    if: github.event.inputs.model_type == 'image' || github.event.inputs.model_type == 'both' || github.event_name == 'schedule'
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install huggingface_hub jq
+
+      - name: Login to Hugging Face Hub (Write Access)
+        run: huggingface-cli login --token ${{ secrets.HF_HUB_TOKEN_WRITE }}
+
+      - name: Run Image Model Training and Evaluation
+        id: train_eval_image
+        run: |
+          echo "Starting image model training on CPU runner..."
+          python finetune_imageClassifier_model.py
+          if [ ! -f ./results/eval_results_image.json ]; then
+              echo "Image evaluation results file not found!"
+              exit 1
+          fi
+          new_f1=$(jq '.eval_f1' ./results/eval_results_image.json)
+          echo "Extracted new image F1 score: $new_f1"
+          echo "new_f1=$new_f1" >> $GITHUB_OUTPUT
+
+      - name: Get Current Best Image F1 Score
+        id: get_current_image_f1
+        run: |
+          if [ ! -f current_f1_image.txt ]; then
+              echo "0.0" > current_f1_image.txt
+              echo "Created current_f1_image.txt with initial value 0.0"
+          fi
+          current_f1=$(cat current_f1_image.txt | grep -oE '[0-9]+\.?[0-9]*' || echo "0.0")
+          echo "current_f1=$current_f1" >> $GITHUB_OUTPUT
+          echo "Current best image F1: $current_f1"
+          echo "New image model F1: ${{ steps.train_eval_image.outputs.new_f1 }}"
+
+      - name: Compare Image F1 Scores
+        id: promote_image
+        run: |
+          if awk -v new_f1="${{ steps.train_eval_image.outputs.new_f1 }}" -v current_f1="${{ steps.get_current_image_f1.outputs.current_f1 }}" 'BEGIN { exit !(new_f1 > current_f1) }'; then
+              echo "New image model is better! Promoting."
+              echo "promote_needed=true" >> $GITHUB_OUTPUT
+              echo "${{ steps.train_eval_image.outputs.new_f1 }}" > current_f1_image.txt
+          else
+              echo "Current image model is better or equal. No promotion needed."
+              echo "promote_needed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Push Better Image Model to Hub
+        if: steps.promote_image.outputs.promote_needed == 'true'
+        run: |
+          echo "Pushing the new best image model to the Hugging Face Hub..."
+          huggingface-cli login --token ${{ secrets.HF_HUB_TOKEN_WRITE }}
+          huggingface-cli upload IoanRoume/ai-image-classifier ./finetuned_artifact_model \
+            --commit-message "Promote new image model with F1=${{ steps.train_eval_image.outputs.new_f1 }}"
+
+      - name: Commit and Push Updated Image F1 Score
+        if: steps.promote_image.outputs.promote_needed == 'true'
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git add current_f1_image.txt
+          if git diff --staged --quiet; then
+              echo "No changes to commit in current_f1_image.txt."
+          else
+              git commit -m "Update best image F1 score to ${{ steps.train_eval_image.outputs.new_f1 }}"
+              echo "Pushing updated image F1 score..."
               git push
           fi

@@ -78,7 +78,7 @@ print("Evaluation metrics:", eval_metrics)
 
 # Ensure results directory exists
 os.makedirs("./results", exist_ok=True)
-metrics_path = os.path.join("./results", "eval_results.json")
+metrics_path = os.path.join("./results", "eval_results_text.json")
 with open(metrics_path, "w") as f:
     json.dump(eval_metrics, f, indent=4)
 
