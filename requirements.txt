@@ -7,4 +7,5 @@ sentencepiece
 scikit-learn
 datasets
 huggingface-hub
+librosa
 emoji==0.6.0
