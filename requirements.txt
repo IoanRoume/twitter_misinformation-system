@@ -7,4 +7,7 @@ sentencepiece
 scikit-learn
 datasets
 huggingface-hub
+librosa
+Pillow
+python-multipart
 emoji==0.6.0
