@@ -9,12 +9,12 @@ import io
 import tempfile
 import librosa
 
-
 HF_TOKEN = os.getenv("HF_TOKEN")
 
 MODEL_TEXT = "IoanRoume/twitter-misinformation-bertweet"
 MODEL_IMAGE = "IoanRoume/ai-image-classifier"
 MODEL_AUDIO = "IoanRoume/ai-audio-classifier"
+
 device = 0 if torch.cuda.is_available() else -1
 
 print("Loading classification pipeline...")
@@ -26,9 +26,11 @@ print("Loading image classification pipeline...")
 image_classifier = pipeline("image-classification", model=MODEL_IMAGE, device=device)
 print("Image pipeline loaded.")
 
+
+
 print("Loading audio classification pipeline...")
 audio_classifier = pipeline("audio-classification", model=MODEL_AUDIO, device=device)
-print("Image pipeline loaded.")
+print("Audio pipeline loaded.")
 
 app = FastAPI(
     title="Multimodal Misinformation Detection API",
@@ -71,12 +73,11 @@ class ImagePredictionItem(BaseModel):
     prediction: str
     confidence: float
 
-class PredictionResponse(BaseModel):
-    predictions: List[PredictionItem]
-
 
 class ImagePredictionResponse(BaseModel):
     predictions: List[ImagePredictionItem]
+
+
 
 @app.post("/predict/image")
 async def predict_image(files: List[UploadFile] = File(...)):
